@@ -1,0 +1,860 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>像素坦克大战</title>
+<style>
+:root{
+  --cell:30px;
+  --board-w:630px;
+  --board-h:450px;
+  --ink:#0b1207;
+  --panel:#22301a;
+  --sand:#d9c78e;
+  --olive:#6a7f3c;
+}
+*{box-sizing:border-box;}
+html,body{height:100%;}
+body{
+  margin:0;
+  min-height:100vh;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  background:radial-gradient(ellipse at 50% 30%, #2b3a1d 0%, #121b0d 62%, #0a0f08 100%);
+  color:var(--sand);
+  font-family:"Courier New",Courier,monospace;
+  overflow:auto;
+}
+body::after{
+  content:"";
+  position:fixed;
+  inset:0;
+  z-index:60;
+  pointer-events:none;
+  background:repeating-linear-gradient(0deg,rgba(0,0,0,.14) 0 2px,transparent 2px 4px);
+}
+.shell{
+  position:relative;
+  padding:22px 18px;
+}
+.hud{
+  display:flex;
+  gap:10px;
+  margin:0 0 10px 3px;
+}
+.hud-box{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  background:var(--panel);
+  border:3px solid var(--ink);
+  box-shadow:4px 4px 0 rgba(0,0,0,.45);
+  padding:7px 12px;
+  font-size:13px;
+  line-height:1;
+}
+.hud-label{
+  color:#9fb06a;
+  font-size:11px;
+  letter-spacing:1px;
+}
+.hud-value{
+  color:#f2e2a8;
+  font-weight:700;
+  min-width:38px;
+}
+.stage{
+  position:relative;
+  display:inline-block;
+  padding:4px;
+  background:#0b1207;
+  border:5px solid #070c05;
+  outline:3px solid #4a5c31;
+  box-shadow:0 0 0 3px #111a0c, 10px 10px 0 rgba(0,0,0,.42);
+}
+.board{
+  position:relative;
+  width:var(--board-w);
+  height:var(--board-h);
+  display:grid;
+  grid-template-columns:repeat(21,var(--cell));
+  grid-template-rows:repeat(15,var(--cell));
+  background:#0e160c;
+}
+.wall{position:relative;}
+.wall.brick{
+  background-color:#a05c35;
+  background-image:
+    linear-gradient(rgba(36,17,9,.9) 2px,transparent 2px),
+    linear-gradient(90deg,rgba(36,17,9,.9) 2px,transparent 2px);
+  background-size:100% 8px, 16px 100%;
+  background-position:0 0, calc(var(--wc) * -16px) 0;
+  box-shadow:inset 0 0 0 1px rgba(255,204,140,.12);
+}
+.wall.steel{
+  background-color:#5d6a72;
+  background-image:
+    linear-gradient(rgba(24,31,35,.85) 2px,transparent 2px),
+    linear-gradient(90deg,rgba(24,31,35,.85) 2px,transparent 2px);
+  background-size:100% 6px, 6px 100%;
+  box-shadow:inset 0 0 0 1px rgba(0,0,0,.5);
+}
+.wall.steel::before{
+  content:"";
+  position:absolute;
+  left:4px;
+  top:4px;
+  width:3px;
+  height:3px;
+  background:#2b333a;
+  box-shadow:18px 0 0 #2b333a, 0 18px 0 #2b333a, 18px 18px 0 #2b333a;
+}
+.tank{
+  position:absolute;
+  width:30px;
+  height:30px;
+  z-index:10;
+  transform-origin:15px 15px;
+}
+.tank .body{
+  position:absolute;
+  inset:3px;
+  background:#527036;
+  box-shadow:inset 0 0 0 2px #29391c;
+}
+.tank .barrel{
+  position:absolute;
+  left:50%;
+  top:-2px;
+  width:6px;
+  height:13px;
+  margin-left:-3px;
+  background:#222f18;
+  box-shadow:1px 1px 0 #0d1309;
+}
+.tank .cabin{
+  position:absolute;
+  left:11px;
+  top:9px;
+  width:8px;
+  height:8px;
+  background:#718a45;
+  box-shadow:inset 0 0 0 1px #384a24;
+}
+.tank .track{
+  position:absolute;
+  top:3px;
+  bottom:3px;
+  width:5px;
+  background:#1c2615;
+  background-image:repeating-linear-gradient(0deg,#42582a 0 2px,#151d0e 2px 4px);
+  box-shadow:inset 0 0 0 1px #0d1309;
+}
+.tank .track.left{left:3px;}
+.tank .track.right{right:3px;}
+.tank.enemy .body{background:#7d3b2d;box-shadow:inset 0 0 0 2px #3a1a12;}
+.tank.enemy .barrel{background:#3a1c13;}
+.tank.enemy .cabin{background:#a3573c;box-shadow:inset 0 0 0 1px #4e2417;}
+.tank.enemy .track{background:#21110d;background-image:repeating-linear-gradient(0deg,#5b2a1f 0 2px,#190b08 2px 4px);}
+.bullet{
+  position:absolute;
+  width:8px;
+  height:8px;
+  z-index:12;
+  background:#ffe9a8;
+  box-shadow:0 0 4px #ffd75e, 0 0 8px rgba(255,168,40,.75);
+}
+.bullet::before{
+  content:"";
+  position:absolute;
+  left:2px;
+  top:2px;
+  width:4px;
+  height:4px;
+  background:#ff5d2e;
+}
+.overlay{
+  position:absolute;
+  inset:0;
+  z-index:30;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  background:rgba(7,11,5,.82);
+}
+.overlay.hidden{display:none;}
+.panel{
+  width:min(430px,88%);
+  background:#213019;
+  border:3px solid #0b1108;
+  box-shadow:6px 6px 0 rgba(0,0,0,.55);
+  padding:26px 24px 28px;
+  text-align:center;
+}
+.panel h1{
+  margin:0 0 8px;
+  font-size:26px;
+  letter-spacing:2px;
+  color:#f0df9e;
+  text-shadow:3px 3px 0 #0b1108;
+}
+.panel .subtitle{
+  margin:0 0 18px;
+  font-size:11px;
+  letter-spacing:3px;
+  color:#91a35b;
+}
+.controls{
+  display:grid;
+  gap:8px;
+  margin:0 0 16px;
+  font-size:14px;
+}
+.controls div{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:8px;
+  flex-wrap:wrap;
+}
+.key{
+  display:inline-block;
+  min-width:28px;
+  padding:3px 6px;
+  background:#46532e;
+  border:2px solid #0b1108;
+  color:#e9d79a;
+  box-shadow:2px 2px 0 rgba(0,0,0,.5);
+  font-weight:700;
+  text-align:center;
+}
+.hint{
+  margin:0 0 18px;
+  color:#aeb87e;
+  font-size:13px;
+  line-height:1.6;
+}
+.pixel-btn{
+  font:inherit;
+  font-weight:700;
+  letter-spacing:1px;
+  background:var(--olive);
+  color:#0b1207;
+  border:3px solid var(--ink);
+  box-shadow:3px 3px 0 var(--ink);
+  padding:10px 24px;
+  cursor:pointer;
+  text-transform:uppercase;
+}
+.pixel-btn:hover{
+  background:#7d9446;
+  transform:translate(-1px,-1px);
+  box-shadow:4px 4px 0 var(--ink);
+}
+.pixel-btn:active{
+  transform:translate(2px,2px);
+  box-shadow:1px 1px 0 var(--ink);
+}
+#modal.win .panel h1{color:#f4d35e;}
+#modal.lose .panel h1{color:#e0653f;}
+@media (max-width:700px){
+  body{align-items:flex-start;}
+  .shell{transform:scale(.72);transform-origin:top center;}
+}
+</style>
+</head>
+<body>
+<div class="shell">
+  <header class="hud">
+    <div class="hud-box">
+      <span class="hud-label">任务</span>
+      <span class="hud-value" id="hud-status">待命</span>
+    </div>
+    <div class="hud-box">
+      <span class="hud-label">敌坦</span>
+      <span class="hud-value" id="hud-enemies">2</span>
+    </div>
+    <div class="hud-box">
+      <span class="hud-label">弹药</span>
+      <span class="hud-value" id="hud-bullets">0/2</span>
+    </div>
+  </header>
+
+  <main class="stage">
+    <div id="board" class="board" aria-label="坦克大战战场"></div>
+
+    <div id="start-screen" class="overlay">
+      <div class="panel">
+        <h1>像素坦克大战</h1>
+        <p class="subtitle">BREAK THE MAZE</p>
+        <div class="controls">
+          <div>
+            <span class="key">←</span><span class="key">→</span>
+            转向
+          </div>
+          <div>
+            <span class="key">↑</span><span class="key">↓</span>
+            前进 / 后退
+          </div>
+          <div>
+            <span class="key">SPACE</span>
+            发射子弹
+          </div>
+        </div>
+        <p class="hint">击毁两辆敌方坦克即可获胜<br>小心它们射来的炮弹</p>
+        <button id="start-btn" class="pixel-btn">开始游戏</button>
+      </div>
+    </div>
+
+    <div id="modal" class="overlay hidden">
+      <div class="panel">
+        <h1 id="modal-title">任务完成</h1>
+        <p class="hint" id="modal-text"></p>
+        <button id="restart-btn" class="pixel-btn">重新开始</button>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script>
+(function(){
+  'use strict';
+
+  var COLS = 21;
+  var ROWS = 15;
+  var CELL = 30;
+  var BOARD_W = COLS * CELL;
+  var BOARD_H = ROWS * CELL;
+  var TANK_R = 13;
+  var BULLET_R = 4;
+  var PLAYER_SPEED = 78;
+  var PLAYER_TURN = 170;
+  var ENEMY_SPEED = 48;
+  var BULLET_SPEED = 170;
+  var MAX_PLAYER_BULLETS = 2;
+  var MAX_ENEMY_BULLETS = 2;
+  var MAX_BOUNCES = 20;
+
+  var board = document.getElementById('board');
+  var startScreen = document.getElementById('start-screen');
+  var modal = document.getElementById('modal');
+  var modalTitle = document.getElementById('modal-title');
+  var modalText = document.getElementById('modal-text');
+  var hudStatus = document.getElementById('hud-status');
+  var hudEnemies = document.getElementById('hud-enemies');
+  var hudBullets = document.getElementById('hud-bullets');
+
+  var wallRects = [];
+  var grid = [];
+  var player = null;
+  var enemies = [];
+  var bullets = [];
+  var state = 'menu';
+  var activeKeys = new Set();
+  var lastTime = 0;
+
+  function mulberry32(seed) {
+    return function () {
+      seed |= 0;
+      seed = seed + 0x6D2B79F5 | 0;
+      var t = Math.imul(seed ^ seed >>> 15, 1 | seed);
+      t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+      return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    };
+  }
+
+  function buildMap() {
+    var g = [];
+    for (var r = 0; r < ROWS; r++) {
+      g.push(new Array(COLS).fill(0));
+    }
+    for (var c = 0; c < COLS; c++) {
+      g[0][c] = 1;
+      g[ROWS - 1][c] = 1;
+    }
+    for (var row = 0; row < ROWS; row++) {
+      g[row][0] = 1;
+      g[row][COLS - 1] = 1;
+    }
+
+    var rowH = [2, 3, 2, 3];
+    var colW = [2, 2, 2, 3, 2, 3];
+    var y = [1];
+    var x = [1];
+    for (var i = 1; i < rowH.length; i++) {
+      y.push(y[i - 1] + rowH[i - 1] + 1);
+    }
+    for (var j = 1; j < colW.length; j++) {
+      x.push(x[j - 1] + colW[j - 1] + 1);
+    }
+
+    for (var rw = 0; rw < rowH.length - 1; rw++) {
+      for (var cc = x[0]; cc <= x[colW.length - 1] + colW[colW.length - 1] - 1; cc++) {
+        g[y[rw + 1] - 1][cc] = 1;
+      }
+    }
+    for (var cv = 0; cv < colW.length - 1; cv++) {
+      for (var rr = y[0]; rr <= y[rowH.length - 1] + rowH[rowH.length - 1] - 1; rr++) {
+        g[rr][x[cv + 1] - 1] = 1;
+      }
+    }
+
+    var rand = mulberry32((Date.now() ^ (Math.random() * 0xFFFFFFFF)) >>> 0);
+    var steps = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+
+    function carveVertical(gr, gc) {
+      var wallRow = y[gr + 1] - 1;
+      var start = x[gc] + Math.floor((colW[gc] - 2) / 2);
+      g[wallRow][start] = 0;
+      g[wallRow][start + 1] = 0;
+    }
+
+    function carveHorizontal(gr, gc) {
+      var wallCol = x[gc + 1] - 1;
+      var start = y[gr] + Math.floor((rowH[gr] - 2) / 2);
+      g[start][wallCol] = 0;
+      g[start + 1][wallCol] = 0;
+    }
+
+    var visited = new Set(['0,0']);
+    var stack = [[0, 0]];
+
+    while (stack.length) {
+      var cur = stack[stack.length - 1];
+      var cr = cur[0];
+      var cc = cur[1];
+      var options = [];
+      for (var s = 0; s < steps.length; s++) {
+        var nr = cr + steps[s][0];
+        var nc = cc + steps[s][1];
+        if (nr >= 0 && nr < rowH.length && nc >= 0 && nc < colW.length && !visited.has(nr + ',' + nc)) {
+          options.push([nr, nc]);
+        }
+      }
+      for (var oi = options.length - 1; oi > 0; oi--) {
+        var swap = Math.floor(rand() * (oi + 1));
+        var tmp = options[oi];
+        options[oi] = options[swap];
+        options[swap] = tmp;
+      }
+      if (!options.length) {
+        stack.pop();
+        continue;
+      }
+      var next = options[0];
+      if (next[0] === cr) {
+        carveHorizontal(cr, Math.min(cc, next[1]));
+      } else {
+        carveVertical(Math.min(cr, next[0]), cc);
+      }
+      visited.add(next[0] + ',' + next[1]);
+      stack.push(next);
+    }
+
+    for (var r2 = 0; r2 < rowH.length - 1; r2++) {
+      for (var c2 = 0; c2 < colW.length; c2++) {
+        if (rand() < 0.2) carveVertical(r2, c2);
+      }
+    }
+    for (var r3 = 0; r3 < rowH.length; r3++) {
+      for (var c3 = 0; c3 < colW.length - 1; c3++) {
+        if (rand() < 0.2) carveHorizontal(r3, c3);
+      }
+    }
+    return g;
+  }
+
+  function renderWalls() {
+    wallRects = [];
+    for (var r = 0; r < ROWS; r++) {
+      for (var c = 0; c < COLS; c++) {
+        if (!grid[r][c]) continue;
+        var el = document.createElement('div');
+        var edge = r === 0 || r === ROWS - 1 || c === 0 || c === COLS - 1;
+        el.className = 'wall ' + (edge ? 'steel' : 'brick');
+        el.style.setProperty('--wr', r);
+        el.style.setProperty('--wc', c);
+        el.style.gridArea = (r + 1) + ' / ' + (c + 1);
+        wallRects.push({ x: c * CELL, y: r * CELL, w: CELL, h: CELL });
+        board.appendChild(el);
+      }
+    }
+  }
+
+  function setTankPos(tank) {
+    tank.el.style.left = (tank.x - 15) + 'px';
+    tank.el.style.top = (tank.y - 15) + 'px';
+    tank.el.style.transform = 'rotate(' + tank.heading + 'deg)';
+  }
+
+  function createTank(kind, x, y, heading, id) {
+    var el = document.createElement('div');
+    el.className = 'tank' + (kind === 'enemy' ? ' enemy' : '');
+    el.innerHTML = '<div class="track left"></div><div class="track right"></div>' +
+      '<div class="body"></div><div class="cabin"></div><div class="barrel"></div>';
+    board.appendChild(el);
+    var tank = {
+      kind: kind,
+      x: x,
+      y: y,
+      heading: heading,
+      alive: true,
+      el: el,
+      id: id || kind
+    };
+    setTankPos(tank);
+    return tank;
+  }
+
+  function circleHitsRect(cx, cy, r, rect) {
+    var nx = Math.max(rect.x, Math.min(cx, rect.x + rect.w));
+    var ny = Math.max(rect.y, Math.min(cy, rect.y + rect.h));
+    var dx = cx - nx;
+    var dy = cy - ny;
+    return dx * dx + dy * dy <= r * r;
+  }
+
+  function circleHitsWall(x, y, r) {
+    if (x - r < 0 || x + r > BOARD_W || y - r < 0 || y + r > BOARD_H) return true;
+    for (var i = 0; i < wallRects.length; i++) {
+      if (circleHitsRect(x, y, r, wallRects[i])) return true;
+    }
+    return false;
+  }
+
+  function circleHitsTank(x, y, r, exclude) {
+    var tanks = [];
+    if (player && player.alive && player !== exclude) tanks.push(player);
+    for (var i = 0; i < enemies.length; i++) {
+      var e = enemies[i];
+      if (e.alive && e !== exclude) tanks.push(e);
+    }
+    for (var j = 0; j < tanks.length; j++) {
+      var dx = tanks[j].x - x;
+      var dy = tanks[j].y - y;
+      var min = r + TANK_R;
+      if (dx * dx + dy * dy < min * min) return true;
+    }
+    return false;
+  }
+
+  function canPlace(x, y, r, exclude) {
+    return !circleHitsWall(x, y, r) && !circleHitsTank(x, y, r, exclude);
+  }
+
+  function tryMoveTank(tank, dx, dy) {
+    var nx = tank.x + dx;
+    var ny = tank.y + dy;
+    if (canPlace(nx, ny, TANK_R, tank)) {
+      tank.x = nx;
+      tank.y = ny;
+      return true;
+    }
+    if (canPlace(nx, tank.y, TANK_R, tank)) {
+      tank.x = nx;
+      return true;
+    }
+    if (canPlace(tank.x, ny, TANK_R, tank)) {
+      tank.y = ny;
+      return true;
+    }
+    return false;
+  }
+
+  function setBulletPos(b) {
+    b.el.style.left = (b.x - 4) + 'px';
+    b.el.style.top = (b.y - 4) + 'px';
+  }
+
+  function removeBullet(b) {
+    if (b.el) {
+      b.el.remove();
+      b.el = null;
+    }
+    var i = bullets.indexOf(b);
+    if (i >= 0) bullets.splice(i, 1);
+    updateHud();
+  }
+
+  function fireBullet(tank, owner) {
+    if (owner === 'player') {
+      var count = bullets.filter(function (b) { return b.owner === 'player'; }).length;
+      if (count >= MAX_PLAYER_BULLETS) {
+        var oldest = bullets.find(function (b) { return b.owner === 'player'; });
+        if (oldest) removeBullet(oldest);
+      }
+    }
+    var rad = tank.heading * Math.PI / 180;
+    var bx = tank.x + Math.sin(rad) * (TANK_R + 4);
+    var by = tank.y - Math.cos(rad) * (TANK_R + 4);
+    if (circleHitsWall(bx, by, BULLET_R)) {
+      bx = tank.x;
+      by = tank.y;
+    }
+    var b = {
+      x: bx,
+      y: by,
+      vx: Math.sin(rad) * BULLET_SPEED,
+      vy: -Math.cos(rad) * BULLET_SPEED,
+      owner: owner,
+      source: tank.id || 'player',
+      bounces: 0,
+      alive: true,
+      el: null
+    };
+    var el = document.createElement('div');
+    el.className = 'bullet';
+    board.appendChild(el);
+    b.el = el;
+    bullets.push(b);
+    setBulletPos(b);
+    updateHud();
+  }
+
+  function checkBulletHit(b) {
+    if (b.owner === 'player') {
+      for (var i = 0; i < enemies.length; i++) {
+        var e = enemies[i];
+        if (!e.alive || e.id === b.source) continue;
+        var dx = e.x - b.x;
+        var dy = e.y - b.y;
+        var min = TANK_R + BULLET_R;
+        if (dx * dx + dy * dy <= min * min) {
+          destroyEnemy(e);
+          removeBullet(b);
+          return true;
+        }
+      }
+    } else if (player && player.alive && player.id !== b.source) {
+      var pdx = player.x - b.x;
+      var pdy = player.y - b.y;
+      var pmin = TANK_R + BULLET_R;
+      if (pdx * pdx + pdy * pdy <= pmin * pmin) {
+        destroyPlayer();
+        removeBullet(b);
+        return true;
+      }
+    }
+    return false;
+  }
+
+  function stepBullet(b, dt) {
+    var dist = BULLET_SPEED * dt / 1000;
+    var remaining = dist;
+    while (remaining > 0 && b.alive) {
+      var stepLen = Math.min(3, remaining);
+      remaining -= stepLen;
+      if (b.vx !== 0) {
+        var nx = b.x + Math.sign(b.vx) * stepLen;
+        if (circleHitsWall(nx, b.y, BULLET_R)) {
+          b.vx = -b.vx;
+          b.bounces++;
+          if (b.bounces >= MAX_BOUNCES) {
+            removeBullet(b);
+            return;
+          }
+        } else {
+          b.x = nx;
+        }
+      }
+      if (b.vy !== 0) {
+        var ny = b.y + Math.sign(b.vy) * stepLen;
+        if (circleHitsWall(b.x, ny, BULLET_R)) {
+          b.vy = -b.vy;
+          b.bounces++;
+          if (b.bounces >= MAX_BOUNCES) {
+            removeBullet(b);
+            return;
+          }
+        } else {
+          b.y = ny;
+        }
+      }
+      setBulletPos(b);
+      if (checkBulletHit(b)) return;
+    }
+  }
+
+  function destroyEnemy(enemy) {
+    if (!enemy.alive) return;
+    enemy.alive = false;
+    enemy.el.remove();
+    updateHud();
+    var allGone = enemies.every(function (e) { return !e.alive; });
+    if (allGone) endGame('win');
+  }
+
+  function destroyPlayer() {
+    if (!player.alive) return;
+    player.alive = false;
+    player.el.remove();
+    updateHud();
+    endGame('lose');
+  }
+
+  function endGame(result) {
+    if (state !== 'playing') return;
+    state = result === 'win' ? 'won' : 'lost';
+    activeKeys.clear();
+    updateHud();
+    modal.classList.remove('hidden');
+    modal.classList.toggle('win', result === 'win');
+    modal.classList.toggle('lose', result === 'lose');
+    if (result === 'win') {
+      modalTitle.textContent = '任务完成';
+      modalText.textContent = '全部敌方坦克已消灭';
+    } else {
+      modalTitle.textContent = '坦克被击毁';
+      modalText.textContent = '战场防线失守，任务失败';
+    }
+  }
+
+  function updateEnemy(e, dt) {
+    e.decide -= dt;
+    if (e.decide <= 0) {
+      e.decide = 700 + Math.random() * 1300;
+      e.heading += (Math.random() - 0.5) * 180;
+    }
+    var rad = e.heading * Math.PI / 180;
+    var aheadX = e.x + Math.sin(rad) * (TANK_R + 8);
+    var aheadY = e.y - Math.cos(rad) * (TANK_R + 8);
+    if (circleHitsWall(aheadX, aheadY, TANK_R - 5)) {
+      e.heading += (Math.random() < 0.5 ? -1 : 1) * (45 + Math.random() * 80);
+      e.decide = 350;
+    } else {
+      tryMoveTank(
+        e,
+        Math.sin(rad) * ENEMY_SPEED * dt / 1000,
+        -Math.cos(rad) * ENEMY_SPEED * dt / 1000
+      );
+    }
+    setTankPos(e);
+
+    e.shootAcc += dt;
+    if (e.shootAcc >= e.cooldown) {
+      e.shootAcc = 0;
+      e.cooldown = 1800 + Math.random() * 1400;
+      var own = bullets.filter(function (b) {
+        return b.owner === 'enemy' && b.source === e.id;
+      });
+      if (own.length < MAX_ENEMY_BULLETS) {
+        fireBullet(e, 'enemy');
+      }
+    }
+  }
+
+  function updateHud() {
+    var alive = enemies.filter(function (e) { return e.alive; }).length;
+    hudEnemies.textContent = alive;
+    var playerBullets = bullets.filter(function (b) { return b.owner === 'player'; }).length;
+    hudBullets.textContent = playerBullets + '/' + MAX_PLAYER_BULLETS;
+    if (state === 'playing') hudStatus.textContent = '战斗中';
+    else if (state === 'won') hudStatus.textContent = '任务完成';
+    else if (state === 'lost') hudStatus.textContent = '任务失败';
+    else hudStatus.textContent = '待命';
+  }
+
+  function resetGame() {
+    board.innerHTML = '';
+    bullets = [];
+    enemies = [];
+    player = null;
+    grid = buildMap();
+    renderWalls();
+
+    player = createTank('player', 75, 375, 0);
+    var e1 = createTank('enemy', 255, 75, 180, 'enemy-1');
+    var e2 = createTank('enemy', 555, 75, 180, 'enemy-2');
+    e1.decide = 400;
+    e1.shootAcc = 220;
+    e1.cooldown = 1900 + Math.random() * 1300;
+    e2.decide = 900;
+    e2.shootAcc = 760;
+    e2.cooldown = 1900 + Math.random() * 1300;
+    enemies = [e1, e2];
+
+    activeKeys.clear();
+    updateHud();
+  }
+
+  function startGame() {
+    state = 'playing';
+    startScreen.classList.add('hidden');
+    modal.classList.add('hidden');
+    resetGame();
+    updateHud();
+  }
+
+  var MOVE_KEYS = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'KeyW', 'KeyS', 'KeyA', 'KeyD'];
+
+  function updatePlayer(dt) {
+    var turn = 0;
+    if (activeKeys.has('ArrowLeft') || activeKeys.has('KeyA')) turn -= PLAYER_TURN;
+    if (activeKeys.has('ArrowRight') || activeKeys.has('KeyD')) turn += PLAYER_TURN;
+    if (turn !== 0) {
+      player.heading = (player.heading + turn * dt / 1000 + 360) % 360;
+    }
+    var forward = 0;
+    if (activeKeys.has('ArrowUp') || activeKeys.has('KeyW')) forward += PLAYER_SPEED;
+    if (activeKeys.has('ArrowDown') || activeKeys.has('KeyS')) forward -= PLAYER_SPEED;
+    if (forward !== 0) {
+      var rad = player.heading * Math.PI / 180;
+      tryMoveTank(
+        player,
+        Math.sin(rad) * forward * dt / 1000,
+        -Math.cos(rad) * forward * dt / 1000
+      );
+    }
+    setTankPos(player);
+  }
+
+  window.addEventListener('keydown', function (e) {
+    if (e.code === 'Space') {
+      e.preventDefault();
+      if (!e.repeat && state === 'playing' && player && player.alive) {
+        fireBullet(player, 'player');
+      }
+      return;
+    }
+    if (MOVE_KEYS.indexOf(e.code) >= 0) {
+      e.preventDefault();
+      activeKeys.add(e.code);
+    }
+  });
+
+  window.addEventListener('keyup', function (e) {
+    activeKeys.delete(e.code);
+  });
+
+  document.getElementById('start-btn').addEventListener('click', startGame);
+  document.getElementById('restart-btn').addEventListener('click', startGame);
+
+  function frame(now) {
+    var dt = Math.min(50, now - lastTime);
+    lastTime = now;
+
+    if (state === 'playing') {
+      if (player && player.alive) updatePlayer(dt);
+
+      for (var i = 0; i < enemies.length; i++) {
+        var e = enemies[i];
+        if (e.alive) updateEnemy(e, dt);
+      }
+
+      var snap = bullets.slice();
+      for (var j = 0; j < snap.length; j++) {
+        stepBullet(snap[j], dt);
+        if (state !== 'playing') break;
+      }
+    }
+    requestAnimationFrame(frame);
+  }
+
+  resetGame();
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
